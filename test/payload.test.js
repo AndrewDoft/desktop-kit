@@ -291,15 +291,15 @@ test("verifyEntry re-hashes against the recorded manifest; throws on mismatch or
   const c = client(h, fx);
   await c.check();
   await c.activate();
-  assert.doesNotThrow(() => c.verifyEntry(["entry.js"]));
+  await assert.doesNotReject(c.verifyEntry(["entry.js"]));
   // the store's blobs (and hardlinks to them) are read-only; simulate a tamper attempt the way
   // an attacker with directory-write-but-not-file-write access would have to: chmod, then replace.
   const dir = c.resolve().dir;
   const entryPath = path.join(dir, "entry.js");
   fs.chmodSync(entryPath, 0o666);
   fs.writeFileSync(entryPath, randomBytes(32));
-  assert.throws(() => c.verifyEntry(["entry.js"]), /does not match/);
-  assert.throws(() => c.verifyEntry(["missing.js"]), /is not part of/);
+  await assert.rejects(c.verifyEntry(["entry.js"]), /does not match/);
+  await assert.rejects(c.verifyEntry(["missing.js"]), /is not part of/);
 });
 
 test("gc keeps exactly {current, previous, staged} read from the JSON files, never by mtime", async (t) => {
@@ -367,16 +367,58 @@ test("hashTree hashes a directory tree deterministically, posix paths, sorted", 
   assert.equal(files[0].s, 3);
 });
 
-test("hashTree fails loudly on a symlink instead of silently omitting it", async () => {
-  const dir = tmpRoot("tree-symlink");
-  fs.writeFileSync(path.join(dir, "real.txt"), "x");
+test("hashTree dereferences a symlink resolving to a regular file inside the tree, and ships it as an ordinary entry", async () => {
+  const dir = tmpRoot("tree-symlink-ok");
+  fs.writeFileSync(path.join(dir, "real.txt"), "hello");
   try {
     fs.symlinkSync(path.join(dir, "real.txt"), path.join(dir, "link.txt"));
   } catch (err) {
     if (err.code === "EPERM") return; // no symlink privilege on this runner; nothing to assert
     throw err;
   }
-  await assert.rejects(hashTree(dir), /symlink/);
+  const files = await hashTree(dir);
+  const entry = files.find((f) => f.p === "link.txt");
+  assert.ok(entry, "the symlink is shipped as an ordinary file entry");
+  assert.equal(entry.h, sha(Buffer.from("hello")));
+  assert.equal(entry.s, 5);
+});
+
+test("hashTree fails loudly on a symlink resolving outside the tree, instead of silently omitting or leaking it", async () => {
+  const outside = tmpRoot("tree-symlink-outside-target");
+  fs.writeFileSync(path.join(outside, "secret.txt"), "s");
+  const dir = tmpRoot("tree-symlink-outside");
+  try {
+    fs.symlinkSync(path.join(outside, "secret.txt"), path.join(dir, "escape.txt"));
+  } catch (err) {
+    if (err.code === "EPERM") return;
+    throw err;
+  }
+  await assert.rejects(hashTree(dir), /resolves outside the tree/);
+});
+
+test("hashTree fails loudly on a symlink resolving to a directory", async () => {
+  const dir = tmpRoot("tree-symlink-dir");
+  fs.mkdirSync(path.join(dir, "real-dir"));
+  try {
+    fs.symlinkSync(path.join(dir, "real-dir"), path.join(dir, "dirlink"));
+  } catch (err) {
+    if (err.code === "EPERM") return;
+    throw err;
+  }
+  await assert.rejects(hashTree(dir), /does not resolve to a regular file/);
+});
+
+test("hashTree fails loudly on a dangling symlink", async () => {
+  // Named to avoid the word "dangling" anywhere in the path: the raw ENOENT a naive
+  // implementation would throw instead must not accidentally satisfy the regex below.
+  const dir = tmpRoot("tree-symlink-gone");
+  try {
+    fs.symlinkSync(path.join(dir, "nope.txt"), path.join(dir, "link.txt"));
+  } catch (err) {
+    if (err.code === "EPERM") return;
+    throw err;
+  }
+  await assert.rejects(hashTree(dir), /symlink target does not exist/);
 });
 
 test("a decompression bomb is rejected before the oversized buffer is produced, not after (finding 2)", async (t) => {
@@ -479,7 +521,7 @@ test("verifyEntry and resolve() re-verify the signed pulse + manifest.raw, not a
   const c = client(h, fx);
   await c.check();
   await c.activate();
-  assert.doesNotThrow(() => c.verifyEntry(["boot.js"]));
+  await assert.doesNotReject(c.verifyEntry(["boot.js"]));
   const dir = c.resolve().dir;
 
   // an attacker with directory-write (but not the signing key) edits the file AND forges a
@@ -490,7 +532,7 @@ test("verifyEntry and resolve() re-verify the signed pulse + manifest.raw, not a
   const forged = { ...fx.manifest, files: fx.manifest.files.map((f) => (f.p === "boot.js" ? { ...f, h: sha(evil) } : f)) };
   fs.writeFileSync(path.join(dir, ".manifest.raw"), JSON.stringify(forged));
 
-  assert.throws(() => c.verifyEntry(["boot.js"]), /no verified manifest/);
+  await assert.rejects(c.verifyEntry(["boot.js"]), /no verified manifest/);
   assert.throws(() => c.resolve(), /no runnable payload tree/, "resolve() fails closed rather than trusting the forged tree");
 });
 
@@ -731,6 +773,31 @@ test("activate() refuses and unstages a staged build that was marked bad since i
   fs.writeFileSync(path.join(c.root, "bad.json"), JSON.stringify({ builds: ["p2"] }));
   await assert.rejects(c.activate(), /now marked bad/);
   assert.equal(c.staged(), null, "a genuinely bad-listed build is dropped, not retried");
+});
+
+test("hashing a ~200 MB tree never blocks the event loop — a setInterval tick keeps firing throughout", async (t) => {
+  const dir = tmpRoot("tree-large");
+  const FILE_SIZE = 50 * 1024 * 1024; // 50 MiB x 4 files = 200 MiB, spread across bounded-concurrency workers
+  for (let i = 0; i < 4; i++) {
+    fs.writeFileSync(path.join(dir, `big-${i}.bin`), Buffer.alloc(FILE_SIZE, i + 1));
+  }
+
+  let maxGap = 0;
+  let last = Date.now();
+  const timer = setInterval(() => {
+    const now = Date.now();
+    maxGap = Math.max(maxGap, now - last);
+    last = now;
+  }, 10);
+  t.after(() => clearInterval(timer));
+
+  const files = await hashTree(dir);
+
+  clearInterval(timer);
+  assert.equal(files.length, 4);
+  // Measured on dev hardware: streaming stays ~10ms; a blocking readFileSync/hash of one 50 MiB
+  // file alone stalls it past 100ms. 50ms cleanly separates the two with headroom either way.
+  assert.ok(maxGap < 50, `event loop stalled for ${maxGap}ms while hashing a large tree (readFileSync creeping back in?)`);
 });
 
 test("path/build/hash validators (finding 6) reject Windows-hostile and colliding names", () => {

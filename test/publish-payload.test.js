@@ -138,17 +138,47 @@ test("rollback refuses a --to build id that would not be a safe directory name (
   bad(["rollback", ...A, "--channel", "stable", "--to", "../escape", "--out", out, ...KEYARGS], /invalid build/);
 });
 
-test("publish refuses a tree containing a symlink instead of silently omitting it from the manifest", async () => {
+test("publish dereferences a symlink to an in-tree regular file and ships it as an ordinary manifest entry", () => {
   const out = tmp();
   const tree = tmp();
-  fs.writeFileSync(path.join(tree, "real.txt"), "x");
+  fs.writeFileSync(path.join(tree, "real.txt"), "hello");
   try {
     fs.symlinkSync(path.join(tree, "real.txt"), path.join(tree, "link.txt"));
   } catch (err) {
     if (err.code === "EPERM") return; // no symlink privilege on this runner; nothing to assert
     throw err;
   }
-  bad([...A, "--channel", "canary", "--build", "1.0.0", "--seq", "1", "--schema-head", "7", "--shell-min", "2", "--tree", tree, "--out", out, ...KEYARGS], /symlink/);
+  ok([...A, "--channel", "canary", "--build", "1.0.0", "--seq", "1", "--schema-head", "7", "--shell-min", "2", "--tree", tree, "--out", out, ...KEYARGS]);
+  const manifestHash = pulse(out, "canary").manifest;
+  const manifest = JSON.parse(fs.readFileSync(path.join(out, "p", "m", `${manifestHash}.json`), "utf8"));
+  const entry = manifest.files.find((f) => f.p === "link.txt");
+  assert.ok(entry, "the symlink was shipped as an ordinary file entry");
+  assert.equal(entry.h, createHash("sha256").update("hello").digest("hex"));
+});
+
+test("publish refuses a symlink that resolves outside the tree, to a directory, or dangles", () => {
+  const tree = tmp();
+  fs.writeFileSync(path.join(tree, "real.txt"), "x");
+  const publishArgs = () => [...A, "--channel", "canary", "--build", "1.0.0", "--seq", "1", "--schema-head", "7", "--shell-min", "2", "--tree", tree, "--out", tmp(), ...KEYARGS];
+
+  const outside = tmp();
+  fs.writeFileSync(path.join(outside, "secret.txt"), "s");
+  try {
+    fs.symlinkSync(path.join(outside, "secret.txt"), path.join(tree, "escape.txt"));
+  } catch (err) {
+    if (err.code === "EPERM") return; // no symlink privilege on this runner; nothing to assert
+    throw err;
+  }
+  bad(publishArgs(), /resolves outside the tree/);
+  fs.rmSync(path.join(tree, "escape.txt"));
+
+  fs.mkdirSync(path.join(tree, "dir"));
+  fs.symlinkSync(path.join(tree, "dir"), path.join(tree, "dirlink"));
+  bad(publishArgs(), /does not resolve to a regular file/);
+  fs.rmSync(path.join(tree, "dirlink"));
+
+  fs.symlinkSync(path.join(tree, "nope.txt"), path.join(tree, "link2.txt"));
+  bad(publishArgs(), /symlink target does not exist/);
 });
 
 test("publish refuses a --have file containing something that is not a sha256 hash", () => {

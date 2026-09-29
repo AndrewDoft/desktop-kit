@@ -49,10 +49,11 @@ await payload.activate();   // staged -> current, as a trial -> { dir, build, pr
 payload.confirm();          // trial -> confirmed; also runs gc()
 payload.bootFailed(reason); // 3 strikes -> auto-revert; -> { reverted, dir }
 payload.revert(reason);     // immediate revert to previous; bad-lists the build
-payload.verifyEntry(relPaths); // re-verifies the signed pulse + manifest, then re-hashes; throws on mismatch
+await payload.verifyEntry(relPaths); // re-verifies the signed pulse + manifest, then re-hashes (streamed above 1 MiB); throws on mismatch
 payload.gc();                  // keep exactly {current, previous, staged}; sweep unreferenced blobs and day-old .partial files
 payload.start({ everyMs }); payload.stop(); // periodic check(), emits "staged"
-hashTree(dir);               // -> manifest `files` array; used by the publisher and seed mapping; throws on a symlink
+await hashTree(dir);         // -> manifest `files` array; used by the publisher and seed mapping; dereferences an
+                              // in-tree symlink to a regular file, throws on one that dangles, is a directory, or escapes the tree
 ```
 
 On-disk layout under `root`:
