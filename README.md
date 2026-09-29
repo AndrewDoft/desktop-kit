@@ -44,28 +44,38 @@ const payload = createPayloadClient({
 
 payload.resolve();          // SYNC, at boot -> { dir, build, seq, source: "current"|"previous"|"seed", trial }
 await payload.check();      // -> { status: "none"|"staged"|"refused"|"paused"|"not-in-rollout"|"needs-shell", build?, reason? }
-payload.staged();           // -> { build, seq, dir, schemaHead } | null
-payload.activate();         // staged -> current, as a trial -> { dir, build, previous }
+payload.staged();           // -> { build, seq, dir, schemaHead, shellMin } | null
+await payload.activate();   // staged -> current, as a trial -> { dir, build, previous }; re-checks bad-list/shell_min/schemaHead
 payload.confirm();          // trial -> confirmed; also runs gc()
 payload.bootFailed(reason); // 3 strikes -> auto-revert; -> { reverted, dir }
 payload.revert(reason);     // immediate revert to previous; bad-lists the build
-payload.verifyEntry(relPaths); // re-hash against the active manifest; throws on mismatch
-payload.gc();                  // keep current + previous + one more; sweep unreferenced blobs
+payload.verifyEntry(relPaths); // re-verifies the signed pulse + manifest, then re-hashes; throws on mismatch
+payload.gc();                  // keep exactly {current, previous, staged}; sweep unreferenced blobs and day-old .partial files
 payload.start({ everyMs }); payload.stop(); // periodic check(), emits "staged"
-hashTree(dir);               // -> manifest `files` array; used by the publisher and seed mapping
+hashTree(dir);               // -> manifest `files` array; used by the publisher and seed mapping; throws on a symlink
 ```
 
 On-disk layout under `root`:
 
 ```
-store/<sha[0:2]>/<sha>       verified blobs (decompressed), read-only
-versions/<build>/...        materialised by hardlink from the store (copy fallback)
-versions/<build>/.complete  written last; its presence means the tree is runnable
-current.json                {build, seq, previous:{build,seq}|null, trial, trial_started, boots, failures}
+store/<sha[0:2]>/<sha>            verified blobs (decompressed), read-only
+versions/<build>/...              materialised by hardlink from the store (copy fallback)
+versions/<build>/.pulse.json      the raw signed pulse bytes that named this build
+versions/<build>/.manifest.raw    the raw manifest bytes, hash-bound to .pulse.json
+versions/<build>/.complete        written last; its presence means the tree is runnable
+current.json                {build, seq, previous:{build,seq}|null, trial, trial_started, boots, failures,
+                              high_seq, high_seq_build, high_seq_manifest, high_seq_issued}
 bad.json                    {builds:[...]} — never re-applied
 staged.json                 the verified+materialised build waiting on activate()
 seed-index.json             the seed's cached hash tree, keyed by seedBuild
 ```
+
+`resolve()` and `verifyEntry()` never trust `.manifest.raw` on its own: they re-verify
+`.pulse.json`'s signature and that `sha256(.manifest.raw)` matches the signed pulse's `manifest`
+field, so editing a tree file and the manifest together (without the signing key) no longer
+passes. `current.json`'s `high_seq*` fields are a floor that only moves forward, independent of
+`seq` (which moves backward on a rollback) — replaying an old, validly-signed pulse can never
+re-stage a build once a higher seq has been seen.
 
 Wire format (`https://.../p/`): `<app>/<channel>/<platform>/pulse.json` (the signed pulse:
 `{app, channel, platform, build, seq, manifest, shell_min, schema_head, rollout, paused, issued}`,

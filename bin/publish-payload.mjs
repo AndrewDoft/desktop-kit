@@ -30,7 +30,7 @@ import { createHash, createPrivateKey } from "node:crypto";
 import { brotliCompressSync, constants as zlibConstants } from "node:zlib";
 import fs from "node:fs";
 import path from "node:path";
-import { hashTree, PULSE_DOMAIN } from "../lib/payload.js";
+import { hashTree, validateBuild, validateManifest, PULSE_DOMAIN } from "../lib/payload.js";
 import { signDocument } from "../lib/signed-feed.js";
 
 function fail(msg) {
@@ -144,6 +144,7 @@ function findManifest(out, build, platform) {
 function rollback(args) {
   need(args, ["app", "channel", "platform", "to", "out", "key-env", "key-id"]);
   const { app, channel, platform, to } = args;
+  try { validateBuild(to); } catch (err) { fail(err.message); }
   const out = path.resolve(args.out);
   const cur = readPulse(out, app, channel, platform);
   if (cur.build === to) fail(`${channel} is already on ${to}`);
@@ -169,11 +170,15 @@ async function publish(args) {
   const rollout = args.rollout !== undefined ? int(args.rollout, "rollout") : 100;
   const key = loadKey(args);
 
+  try { validateBuild(build); } catch (err) { fail(err.message); }
+
   const have = new Set();
   if (args.have) {
     for (const line of fs.readFileSync(path.resolve(args.have), "utf8").split(/\r?\n/)) {
       const h = line.trim();
-      if (h) have.add(h);
+      if (!h) continue;
+      if (!/^[0-9a-f]{64}$/.test(h)) fail(`--have contains an invalid hash: ${JSON.stringify(h)}`);
+      have.add(h);
     }
   }
 
@@ -204,6 +209,7 @@ async function publish(args) {
   const entry = fs.existsSync(entryFile) ? JSON.parse(fs.readFileSync(entryFile, "utf8")) : {};
 
   const manifest = { build, platform, files: files.map(({ p, h, s, x }) => ({ p, h, s, x })), entry };
+  try { validateManifest(manifest); } catch (err) { fail(err.message); }
   const manifestBytes = Buffer.from(JSON.stringify(manifest));
   const manifestHash = createHash("sha256").update(manifestBytes).digest("hex");
   const manifestPath = path.join(out, "p", "m", `${manifestHash}.json`);

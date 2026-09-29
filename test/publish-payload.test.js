@@ -124,3 +124,38 @@ test("rollback points the pulse at an older build's existing manifest, seq+1, `r
   bad(R("1.0.0"), /2 manifests for build 1.0.0.*--manifest/);
   ok(R("1.0.0", ["--manifest", old]));
 });
+
+test("publish refuses a build id that would not be a safe directory name (finding 6)", () => {
+  const out = tmp();
+  const tree = tmp();
+  fs.writeFileSync(path.join(tree, "f.txt"), "x");
+  bad([...A, "--channel", "canary", "--build", "..", "--seq", "1", "--schema-head", "7", "--shell-min", "2", "--tree", tree, "--out", out, ...KEYARGS], /invalid build/);
+});
+
+test("rollback refuses a --to build id that would not be a safe directory name (finding 6)", () => {
+  const out = tmp();
+  publish(out, "stable", "1.0.0", 1);
+  bad(["rollback", ...A, "--channel", "stable", "--to", "../escape", "--out", out, ...KEYARGS], /invalid build/);
+});
+
+test("publish refuses a tree containing a symlink instead of silently omitting it from the manifest", async () => {
+  const out = tmp();
+  const tree = tmp();
+  fs.writeFileSync(path.join(tree, "real.txt"), "x");
+  try {
+    fs.symlinkSync(path.join(tree, "real.txt"), path.join(tree, "link.txt"));
+  } catch (err) {
+    if (err.code === "EPERM") return; // no symlink privilege on this runner; nothing to assert
+    throw err;
+  }
+  bad([...A, "--channel", "canary", "--build", "1.0.0", "--seq", "1", "--schema-head", "7", "--shell-min", "2", "--tree", tree, "--out", out, ...KEYARGS], /symlink/);
+});
+
+test("publish refuses a --have file containing something that is not a sha256 hash", () => {
+  const out = tmp();
+  const tree = tmp();
+  fs.writeFileSync(path.join(tree, "f.txt"), "x");
+  const haveFile = path.join(tmp(), "have.txt");
+  fs.writeFileSync(haveFile, "not-a-hash\n");
+  bad([...A, "--channel", "canary", "--build", "1.0.0", "--seq", "1", "--schema-head", "7", "--shell-min", "2", "--tree", tree, "--out", out, "--have", haveFile, ...KEYARGS], /--have contains an invalid hash/);
+});
