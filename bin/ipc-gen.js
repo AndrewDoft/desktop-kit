@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 "use strict";
 // desktop-kit-ipc <table.js> --preload <out.js> --dts <out.d.ts> [--check]
-// <table.js> exports a defineIpc() table. --check writes nothing and exits 1 if
+// <table.js> exports a defineIpc() table, an array of them, or an object of them. --check writes nothing and exits 1 if
 // either output differs from what is on disk (for CI: the generated files are committed).
 const fs = require("node:fs");
 const path = require("node:path");
@@ -15,7 +15,9 @@ if (!tableFile || (!flag("--preload") && !flag("--dts"))) {
   console.error("usage: desktop-kit-ipc <table.js> [--preload out.js] [--dts out.d.ts] [--check]");
   process.exit(2);
 }
-const table = require(path.resolve(tableFile));
+const mod = require(path.resolve(tableFile));
+// a table, an array of tables, or an object whose values (or .tables) are tables
+const table = mod.global ? mod : Array.isArray(mod) ? mod : Array.isArray(mod.tables) ? mod.tables : Object.values(mod.tables || mod);
 let stale = 0;
 for (const [out, src] of [[flag("--preload"), generatePreload(table)], [flag("--dts"), generateDts(table)]]) {
   if (!out) continue;

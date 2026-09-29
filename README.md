@@ -15,7 +15,7 @@ const kit = require("@masora/desktop-kit");
 | `safe-open` | `isSafeUrl`, `openSafe` — https, or http to loopback only |
 | `ipc-guard` | `senderAllowed(url, {origins, files, anyFile})`, `guardIpc(ipcMain, policy, denied?)` |
 | `log` | `createLog({dir, name, maxBytes, keep})` — size-capped rotating file log |
-| `ipc-table` | `defineIpc(table)` → `generatePreload`, `generateDts`, `registerIpc`; CLI `desktop-kit-ipc table.js --preload p.js --dts b.d.ts [--check]` |
+| `ipc-table` | `defineIpc(table)` (one table per `window` global; several go into one preload) → `generatePreload`, `generateDts`, `registerIpc`, `createIpcRegistry`; CLI `desktop-kit-ipc table.js --preload p.js --dts b.d.ts [--check]` |
 
 Consume as `"@masora/desktop-kit": "github:AndrewDoft/desktop-kit#v0.1.0"`.
 No keys live here; public keys are passed in by each app. `npm test` runs the suite.

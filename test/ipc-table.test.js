@@ -59,7 +59,7 @@ test("generated .d.ts carries every call and event with the author's types", () 
   assert.match(dts, /config\(\): Promise<\{ hub: string \} \| null>;/);
   assert.match(dts, /test\(hub: string, token: string\): Promise<\{ ok: boolean \}>;/);
   assert.match(dts, /send\(room: string, n: number\): Promise<void>;/);
-  assert.match(dts, /onUpdate\(fn: \(payload: Status\) => void\): \(\) => void;/);
+  assert.match(dts, /onUpdate: \(fn: \(payload: Status\) => void\) => \(\) => void;/);
   assert.match(dts, /demo: DemoBridge;/);
   assert.match(dts, /\/\*\* The saved settings\. \*\//);
 });
@@ -95,4 +95,85 @@ test("CLI: writes the files, --check passes when current and fails (exit 1) when
   const stale = run("--check");
   assert.equal(stale.status, 1);
   assert.match(stale.stderr, /out of date/);
+});
+
+const { createIpcRegistry } = require("..");
+
+const multi = [
+  defineIpc({
+    global: "one", typeName: "OneBridge", header: "Line one\nLine two", declareWindow: false,
+    constants: { available: { value: true, type: "boolean" } },
+    calls: {
+      scheduleSave: { channel: "l:save", params: ["s"], payload: "{ schedule: s }", type: "(s: Partial<S>) => Promise<R>", optional: true, doc: "Save.\nSecond line." },
+      search: { channel: "l:search", params: ["root", "query", "opts"], payload: "{ root, query, ...(opts || {}) }", type: "(root: string | null, query: string, opts?: { k?: number }) => Promise<R>" },
+    },
+    events: { onUpdate: { channel: "app:update", payload: "unknown", type: "(cb: (s: unknown) => void) => void", optional: true } },
+  }),
+  defineIpc({
+    global: "two", prelude: "function toU8(v) { return new Uint8Array(v); }",
+    calls: { send: { channel: "d:send", params: [["room", "string"], ["u8", "Uint8Array"]], payload: "{ room, bytes: toU8(u8) }", returns: "Promise<void>" } },
+    events: { onMessage: { channel: "d:msg", payload: "{ bytes: Uint8Array }", transform: "payload && payload.bytes ? { ...payload, bytes: toU8(payload.bytes) } : payload" } },
+  }),
+];
+
+test("several tables share one preload; payload, prelude, constants and transform are honoured", async () => {
+  const invoked = [];
+  const exposed = {};
+  const listeners = new Map();
+  const electron = {
+    contextBridge: { exposeInMainWorld: (n, api) => { exposed[n] = api; } },
+    ipcRenderer: { invoke: (ch, ...a) => { invoked.push([ch, ...a]); return Promise.resolve(); }, on: (ch, h) => listeners.set(ch, h), removeListener() {} },
+  };
+  const src = generatePreload(multi);
+  assert.match(src, /^\/\/ GENERATED/);
+  assert.match(src, /\/\/ Line one\n\/\/ Line two/);
+  assert.equal((src.match(/function subscribe/g) || []).length, 1);
+  vm.runInNewContext(src, { require: () => electron, Uint8Array });
+  assert.deepEqual(Object.keys(exposed), ["one", "two"]);
+  assert.equal(exposed.one.available, true);
+  await exposed.one.scheduleSave("x");
+  await exposed.one.search("r", "q", { k: 2 });
+  await exposed.one.search("r", "q");
+  await exposed.two.send("room", [1, 2]);
+  const plain = JSON.parse(JSON.stringify(invoked));
+  assert.deepEqual(plain.slice(0, 3), [["l:save", { schedule: "x" }], ["l:search", { root: "r", query: "q", k: 2 }], ["l:search", { root: "r", query: "q" }]]);
+  assert.equal(Object.keys(plain[3][1].bytes).length, 2);
+  const got = [];
+  exposed.two.onMessage((p) => got.push(p));
+  listeners.get("d:msg")({}, { id: 1, bytes: [7] });
+  assert.equal(got[0].id, 1);
+  assert.ok(got[0].bytes instanceof Uint8Array);
+  assert.match(src, /\/\*\*\n {3}\* Save\.\n {3}\* Second line\.\n {3}\*\//);
+});
+
+test("several tables: one .d.ts, whole-type and optional members, no Window augmentation when declined", () => {
+  const dts = generateDts(multi);
+  assert.match(dts, /export interface OneBridge \{/);
+  assert.match(dts, /export interface TwoBridge \{/);
+  assert.match(dts, /available: boolean;/);
+  assert.match(dts, /scheduleSave\?: \(s: Partial<S>\) => Promise<R>;/);
+  assert.match(dts, /search: \(root: string \| null, query: string, opts\?: \{ k\?: number \}\) => Promise<R>;/);
+  assert.match(dts, /onUpdate\?: \(cb: \(s: unknown\) => void\) => void;/);
+  assert.match(dts, /onMessage: \(fn: \(payload: \{ bytes: Uint8Array \}\) => void\) => \(\) => void;/);
+  assert.match(dts, /two: TwoBridge;/);
+  assert.doesNotMatch(dts, /one: OneBridge;/);
+});
+
+test("registry: unknown and duplicate channels are refused; assertComplete names what main forgot", () => {
+  const reg = [];
+  const ipcMain = { handle: (ch, fn) => reg.push(ch) };
+  const r = createIpcRegistry(ipcMain, multi);
+  r.handle("l:save", () => 1);
+  assert.throws(() => r.handle("l:save", () => 1), /registered twice/);
+  assert.throws(() => r.handle("nope:x", () => 1), /not in the IPC table/);
+  assert.throws(() => r.assertComplete(), /one\.search \(l:search\).*two\.send \(d:send\)/);
+  r.handle("l:search", () => 1);
+  r.handle("d:send", () => 1);
+  assert.doesNotThrow(() => r.assertComplete());
+  // ipcMain.handle is looked up per call, so a later patch (the sender guard) still applies
+  const r2 = createIpcRegistry(ipcMain, multi);
+  ipcMain.handle = (ch) => reg.push(`guarded:${ch}`);
+  r2.handle("d:send", () => 1);
+  assert.equal(reg.at(-1), "guarded:d:send");
+  assert.throws(() => createIpcRegistry(ipcMain, [multi[0], defineIpc({ global: "z", calls: { a: { channel: "l:save", returns: "void" } } })]), /share channel/);
 });
