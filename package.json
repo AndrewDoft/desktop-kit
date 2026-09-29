@@ -1,7 +1,7 @@
 {
   "name": "@masora/desktop-kit",
-  "version": "0.1.3",
-  "description": "Electron plumbing shared by Masora and Zevet desktop apps: signed-feed verify, updater core, single-instance, safe-open, IPC guard, rotating log, IPC table codegen.",
+  "version": "0.2.0",
+  "description": "Electron plumbing shared by Masora and Zevet desktop apps: signed-feed verify, updater core, content-addressed payload client + publisher, single-instance, safe-open, IPC guard, rotating log, IPC table codegen.",
   "main": "index.js",
   "bin": { "desktop-kit-ipc": "bin/ipc-gen.js" },
   "files": ["index.js", "lib", "bin", "LICENSE"],

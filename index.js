@@ -8,4 +8,5 @@ module.exports = {
   ...require("./lib/log.js"),
   ...require("./lib/ipc-table.js"),
   ...require("./lib/family.js"),
+  ...require("./lib/payload.js"),
 };
