@@ -186,6 +186,15 @@ test("readManifest: versions compare numerically; bad entries reject the whole m
   assert.match(readManifest({ ...ok, version: "x" }, "win32-x64").error, /version/);
 });
 
+test("canOnQuit=false refuses before the one-shot marker is written", async (t) => {
+  const bytes = randomBytes(16);
+  const h = await serve({ "latest.json": feed("2.0.0", bytes), "app-2.0.0-setup.exe": bytes }, t);
+  const u = updater(h, { steps: { onQuit: () => assert.fail("must not run"), canOnQuit: () => false } });
+  await u.check();
+  assert.match(u.installOnQuit().error, /cannot install silently/);
+  assert.equal(fs.existsSync(path.join(u.dir, "install-on-quit.json")), false);
+});
+
 test("constructor refuses missing trust config", () => {
   assert.throws(() => new UpdaterCore({ feedUrl: "http://x/", trustedKeys: {} }), /domain/);
   assert.throws(() => new UpdaterCore({ feedUrl: "http://x/", domain: "d" }), /trustedKeys/);
