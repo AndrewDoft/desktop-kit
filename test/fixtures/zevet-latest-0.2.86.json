@@ -1,0 +1,39 @@
+{
+  "version": "0.2.86",
+  "notes": "Electron 44, signed updates on Windows and macOS, macOS self-update.",
+  "platforms": {
+    "win32-x64": {
+      "file": "zevet-0.2.86-windows-x64-setup.exe",
+      "bytes": 147953968,
+      "sha256": "076a915c5225fad15e91b95c39313bceb4ecb00b4ca31f4e97230cba05d56b55"
+    },
+    "darwin-arm64": {
+      "file": "zevet-0.2.86-macos-arm64.dmg",
+      "bytes": 194059832,
+      "sha256": "ac12d086a3ef2fcc442e21764a580ee45a948e34eb62d8edc55d588d4f9632eb"
+    }
+  },
+  "payload": {
+    "schema": 1,
+    "type": "zevet-update",
+    "version": "0.2.86",
+    "notes": "Electron 44, signed updates on Windows and macOS, macOS self-update.",
+    "platforms": {
+      "win32-x64": {
+        "file": "zevet-0.2.86-windows-x64-setup.exe",
+        "bytes": 147953968,
+        "sha256": "076a915c5225fad15e91b95c39313bceb4ecb00b4ca31f4e97230cba05d56b55"
+      },
+      "darwin-arm64": {
+        "file": "zevet-0.2.86-macos-arm64.dmg",
+        "bytes": 194059832,
+        "sha256": "ac12d086a3ef2fcc442e21764a580ee45a948e34eb62d8edc55d588d4f9632eb"
+      }
+    }
+  },
+  "signature": {
+    "algorithm": "ed25519",
+    "key_id": "zevet-2026-09",
+    "signature": "bNZpNrmif8GJVHce+Zw/hjENOv8OLuOkaoknJZ1hRbeCxC/ja0fBK9o3n9xe8aSX7rNhtqmgvgGu+rGGMkFnCg=="
+  }
+}

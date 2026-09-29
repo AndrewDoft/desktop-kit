@@ -1,0 +1,60 @@
+Copyright (c) 2026 Andrew Doft. All rights reserved.
+
+PROPRIETARY. NO LICENSE IS GRANTED TO THE PUBLIC.
+
+This source code is published publicly for two reasons only: so that continuous
+integration can build the macOS and Windows applications, and so those builds can
+be downloaded by people entitled to run them. Public visibility is not an offer of
+any rights.
+
+1. OWNERSHIP
+
+   zevet, including this source code, its design, its name and all associated
+   intellectual property, is and remains the sole property of Andrew Doft. Nothing
+   in this file transfers ownership of anything to anyone.
+
+2. GRANT TO MASORA
+
+   Andrew Doft grants Masora a non-exclusive, worldwide, royalty-free right to
+   reproduce, distribute, sublicense, offer for sale and sell zevet, in source or
+   binary form, on its own or bundled as part of the Masora product, and to
+   authorise its customers to use it on the terms Masora sells it under.
+
+   This grant is a licence, not an assignment. Ownership stays with Andrew Doft
+   under clause 1, and he keeps the unrestricted right to use, license and sell
+   zevet himself, including to parties other than Masora. The grant may be
+   terminated by Andrew Doft on written notice, except that licences already
+   granted to Masora's paying customers survive termination, so that no customer
+   loses software they have paid for.
+
+3. EVERYONE ELSE
+
+   No permission is granted to any other person to use, copy, modify, merge,
+   publish, distribute, sublicense, sell, or create derivative works of this
+   software or any portion of it, in source or binary form, for any purpose.
+
+   Permission to RUN the compiled application is granted to individuals who
+   received a build directly from Andrew Doft, and to Masora's customers under
+   clause 2. It is revocable at any time.
+
+4. WHAT GITHUB'S TERMS COMPEL
+
+   As a condition of hosting a public repository, GitHub's Terms of Service permit
+   other GitHub users to view and fork this repository through GitHub. That is a
+   permission granted to GitHub and its users by GitHub's Terms, not by this
+   license, and it extends no further: forking on GitHub confers no right to use,
+   run, modify, redistribute or relicense this software anywhere. No other right
+   is waived.
+
+5. CONTRIBUTIONS
+
+   Contributions are not solicited. Any contribution that is nevertheless accepted
+   is assigned to Andrew Doft on submission, so that clause 1 continues to hold
+   for the whole work.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHOR BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
