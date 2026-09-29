@@ -76,13 +76,26 @@ Publish with `bin/publish-payload.mjs`:
 
 ```
 node desktop-kit/bin/publish-payload.mjs --app --channel --platform --build --seq \
-  --schema-head --shell-min --tree <dir> --out <staging dir> --key-env <ENV VAR> \
+  --schema-head --shell-min --tree <dir> --out <staging dir> --key-env <ENV VAR> --key-id <id> \
   [--have <file of blob hashes already on the server>] [--rollout N] [--paused] [--rollback <build>]
 ```
 
 Walks `--tree` with `hashTree`, brotli(q9)-compresses every blob not listed in `--have`, and
 writes the `p/` layout (new blobs, manifest, pulse) under `--out`. `--key-env` names an env var
-holding `{"key_id": "...", "private_key": "<ed25519 PEM>"}`; the pulse is signed the same way
+holding the raw ed25519 PKCS8 PEM (newlines optionally encoded as `|`, as in `MASORA_UPDATE_SIGNING_KEY`); `--key-id` is its pinned id; the pulse is signed the same way
 `signed-feed.js` verifies it. Refuses to write a pulse whose `seq` is <= one already staged in
 `--out` for the same app/channel/platform. An optional `<tree>/entry.json` becomes the
 manifest's `entry` field.
+
+Ops subcommands re-sign a pulse in `--out` (a local mirror of the server's `p/` tree) with no
+rebuild; blobs and manifests are never touched and must already be in `--out/p/m`:
+
+```
+publish-payload.mjs promote  --app --platform --from canary --to stable --out <dir> [--rollout N]
+publish-payload.mjs pause|resume --app --channel --platform --out <dir>
+publish-payload.mjs rollback --app --channel --platform --to <build> --out <dir> [--manifest <sha256>]
+```
+
+(all take `--key-env`/`--key-id`). `seq` stays strictly increasing per channel: promote uses
+`max(stable + 1, canary)`, rollback `current + 1` with `rollback` naming the build left; pause/resume
+re-sign the same `seq` (a higher one would make clients re-stage the build they already run).
