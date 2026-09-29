@@ -16,6 +16,7 @@ const kit = require("@masora/desktop-kit");
 | `ipc-guard` | `senderAllowed(url, {origins, files, anyFile})`, `guardIpc(ipcMain, policy, denied?)` |
 | `log` | `createLog({dir, name, maxBytes, keep})` — size-capped rotating file log |
 | `ipc-table` | `defineIpc(table)` (one table per `window` global; several go into one preload) → `generatePreload`, `generateDts`, `registerIpc`, `createIpcRegistry`; CLI `desktop-kit-ipc table.js --preload p.js --dts b.d.ts [--check]` |
+| `family` | the per-user family dir Masora/Zevet/Voice pair through: `familyDir`, `readJson`, `writeJsonAtomic`, `readKey`/`ensureKey` (user-only), `masoraWeb`, heartbeats (`writeHeartbeat`/`readHeartbeat`/`isRunning`), requests (`writeRequest`/`takeRequest`). On-disk format is what shipped apps write; Voice (Python) reads the same files. |
 
 Consume as `"@masora/desktop-kit": "github:AndrewDoft/desktop-kit#v0.1.0"`.
 No keys live here; public keys are passed in by each app. `npm test` runs the suite.

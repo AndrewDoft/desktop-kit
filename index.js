@@ -7,4 +7,5 @@ module.exports = {
   ...require("./lib/single-instance.js"),
   ...require("./lib/log.js"),
   ...require("./lib/ipc-table.js"),
+  ...require("./lib/family.js"),
 };

@@ -1,0 +1,12 @@
+{
+ "app": "voice",
+ "version": "0.1.31",
+ "pid": 99,
+ "updated_at": "2026-09-29T04:00:00+00:00",
+ "running": true,
+ "install_path": "C:\\Program Files\\Zevet Voice",
+ "masora": {
+  "connected": false,
+  "member_email": null
+ }
+}
