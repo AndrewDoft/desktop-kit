@@ -195,6 +195,32 @@ test("canOnQuit=false refuses before the one-shot marker is written", async (t) 
   assert.equal(fs.existsSync(path.join(u.dir, "install-on-quit.json")), false);
 });
 
+test("partSuffix, fetchInit and messages are honoured by the download", async (t) => {
+  const good = randomBytes(64);
+  const seenInit = [];
+  const h = await serve({ "latest.json": feed("2.0.0", good), "app-2.0.0-setup.exe": Buffer.concat([good, good]) }, t);
+  const u = updater(h, {
+    partSuffix: ".partial",
+    fetchInit: { cache: "no-store" },
+    fetchImpl: (url, init) => { seenInit.push([String(url), init]); return fetch(url, init); },
+    messages: { tooLong: () => "the download is larger than the feed said" },
+  });
+  const s = await u.check();
+  assert.match(s.error, /larger than the feed said/);
+  assert.equal(seenInit.at(-1)[1].cache, "no-store");
+  assert.equal(seenInit.at(-1)[1].redirect, "error");
+  assert.deepEqual(fs.readdirSync(u.dir), [], "the .partial file is cleaned up");
+  // a mid-stream failure leaves the custom-suffixed file only while running: prove the suffix is used
+  const bytes = randomBytes(32);
+  const h2 = await serve({ "latest.json": feed("2.0.0", bytes), "app-2.0.0-setup.exe": bytes }, t);
+  const u2 = updater(h2, { partSuffix: ".partial" });
+  const orig = fs.renameSync;
+  let renamedFrom;
+  fs.renameSync = (a, b) => { renamedFrom = a; return orig(a, b); };
+  try { await u2.check(); } finally { fs.renameSync = orig; }
+  assert.match(renamedFrom, /.partial$/);
+});
+
 test("constructor refuses missing trust config", () => {
   assert.throws(() => new UpdaterCore({ feedUrl: "http://x/", trustedKeys: {} }), /domain/);
   assert.throws(() => new UpdaterCore({ feedUrl: "http://x/", domain: "d" }), /trustedKeys/);
